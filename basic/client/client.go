@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"log"
 	"net"
+	"os"
 
 	"github.com/hashicorp/yamux"
 )
@@ -11,9 +13,18 @@ import (
 func main() {
 	fmt.Println("Starting yamux demo - client")
 
-	localAddr := "172.16.87.100:4444"
+	address := ""
+	if len(os.Args)>1 {
+		address = os.Args[1]
+	}
 
-	if err := client(localAddr); err != nil {
+	if address == "" {
+		address = "127.0.0.1:4444"
+	}
+	logrus.Printf("connect to %v", address)
+
+
+	if err := client(address); err != nil {
 		log.Println(err)
 	}
 
