@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	pb "github.com/kata-containers/agent/protocols/grpc"
+	pb "github.com/jimmy-xu/learn-yamux/protocols/grpc"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/hashicorp/yamux"
@@ -28,6 +28,11 @@ var (
 )
 
 
+type agentGRPC struct {
+	sandbox *sandbox
+	version string
+}
+
 type sandbox struct {
 	channel    serialChannel
 }
@@ -43,6 +48,11 @@ func main() {
 	s := sandbox{}
 	serverOpts = append(serverOpts, grpc.UnaryInterceptor(makeUnaryInterceptor()))
 	grpcServer = grpc.NewServer(serverOpts...)
+
+	grpcImpl := &agentGRPC{
+		sandbox: s,
+		version: "",
+	}
 
 	pb.RegisterAgentServiceServer(grpcServer, grpcImpl)
 	pb.RegisterHealthServer(grpcServer, grpcImpl)

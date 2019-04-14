@@ -1,0 +1,13 @@
+.idea
+basic/client/client
+basic/client/client.exe
+basic/server/server
+basic/server/server.exe
+multiplexing/client/client
+multiplexing/client/client.exe
+multiplexing/server/server
+multiplexing/server/server.exe
+serial/client/client
+serial/client/client.exe
+serial/server/server
+serial/server/server.exe
