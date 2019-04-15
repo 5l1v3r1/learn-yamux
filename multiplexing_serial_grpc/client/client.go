@@ -1,158 +1,86 @@
 package main
 
 import (
-	"context"
-	"fmt"
 	"net"
-	"net/url"
 	"os"
 	"strings"
 	"time"
 
-	pb "github.com/jimmy-xu/learn-yamux/protocols/grpc"
-
 	"github.com/hashicorp/yamux"
 	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	grpcStatus "google.golang.org/grpc/status"
 )
 
-var defaultDialTimeout = 15 * time.Second
-var defaultCloseTimeout = 5 * time.Second
+func main()  {
 
-const (
-	unixSocketScheme  = "unix"
-)
-
-// AgentClient is an agent gRPC client connection wrapper for agentgrpc.AgentServiceClient
-type AgentClient struct {
-	pb.GreeterClient
-	conn *grpc.ClientConn
-}
-
-
-func main() {
-	ctx := context.Background()
-	socks := ""
-	if len(os.Args) > 1 {
-		socks = os.Args[1]
-	}
-	if socks == "" {
-		logrus.Fatalf("please specify socks file, for example ~/Documents/antfin/serial/com1")
+	sock := ""
+	if len(os.Args)>1 {
+		sock = os.Args[1]
 	}
 
-	client, err := NewAgentClient(ctx, socks, true)
+	if sock == "" {
+		sock = "/Users/xjimmy/Documents/antfin/serial/com1"
+	}
+	logrus.Printf("connect to %v", sock)
+
+	var defaultDialTimeout = 15 * time.Second
+
+
+	//use unix sock file
+	conn, err := unixDialer(sock, defaultDialTimeout)
 	if err != nil {
-		logrus.Fatalf("NewAgentClient error:%v", err)
+		logrus.Fatalf("connect sock file failed")
+	} else {
+		logrus.Info("connect sock file ok")
 	}
+	defer func() {
+		if err != nil {
+			conn.Close()
+		}
+	}()
 
-	in := pb.HelloRequest{
-		Name: "world",
-	}
-	resp, err := client.SayHello(ctx, &in, nil)
-
-	logrus.Infof("response:%v", resp.Message)
-}
-
-type yamuxSessionStream struct {
-	net.Conn
-	session *yamux.Session
-}
-
-func (y *yamuxSessionStream) Close() error {
-	waitCh := y.session.CloseChan()
-	timeout := time.NewTimer(defaultCloseTimeout)
-
-	if err := y.Conn.Close(); err != nil {
-		return err
-	}
-
-	if err := y.session.Close(); err != nil {
-		return err
-	}
-
-	// block until session is really closed
-	select {
-	case <-waitCh:
-		timeout.Stop()
-	case <-timeout.C:
-		return fmt.Errorf("timeout waiting for session close")
-	}
-
-	return nil
-}
-
-// NewAgentClient creates a new agent gRPC client and handles both unix and vsock addresses.
-//
-// Supported sock address formats are:
-//   - unix://<unix socket path>
-//   - vsock://<cid>:<port>
-//   - <unix socket path>
-func NewAgentClient(ctx context.Context, sock string, enableYamux bool) (*AgentClient, error) {
-	grpcAddr, parsedAddr, err := parse(sock)
+	var session *yamux.Session
+	sessionConfig := yamux.DefaultConfig()
+	// Disable keepAlive since we don't know how much time a container can be paused
+	sessionConfig.EnableKeepAlive = false
+	sessionConfig.ConnectionWriteTimeout = time.Second
+	session, err = yamux.Client(conn, sessionConfig)
 	if err != nil {
-		return nil, err
-	}
-	dialOpts := []grpc.DialOption{grpc.WithInsecure(), grpc.WithBlock()}
-	dialOpts = append(dialOpts, grpc.WithDialer(agentDialer(parsedAddr, enableYamux)))
-
-	ctx, cancel := context.WithTimeout(ctx, defaultDialTimeout)
-	defer cancel()
-	conn, err := grpc.DialContext(ctx, grpcAddr, dialOpts...)
-	if err != nil {
-		return nil, err
+		logrus.Fatalf("create yamux client failed, error:%v", err)
 	}
 
-	return &AgentClient{
-		GreeterClient: pb.NewGreeterClient(conn),
-		conn:          conn,
-	}, nil
+	// 建立应用流通道1
+	stream1, _ := session.Open()
+	for i:=0; i<5; i++ {
+		logrus.Infof("%v stream1 send ping", i)
+		stream1.Write([]byte("ping" ))
+		time.Sleep(1 * time.Second)
+	}
+
+	// 建立应用流通道2
+	stream2, _ := session.Open()
+	for i:=0; i<5; i++ {
+		logrus.Infof("%v stream1 send pong", i)
+		stream2.Write([]byte("pong" ))
+		time.Sleep(1 * time.Second)
+	}
+
+	// 清理退出
+	time.Sleep(1 * time.Second)
+	logrus.Infof("close stream")
+	stream1.Close()
+	stream2.Close()
+
+	time.Sleep(5 * time.Second)
+	logrus.Infof("close session")
+	session.Close()
+
+	time.Sleep(10 * time.Second)
+	logrus.Infof("close conn")
+	conn.Close()
 }
 
-
-type dialer func(string, time.Duration) (net.Conn, error)
-
-func agentDialer(addr *url.URL, enableYamux bool) dialer {
-	var d dialer = unixDialer
-
-	// yamux dialer
-	return func(sock string, timeout time.Duration) (net.Conn, error) {
-		conn, err := d(sock, timeout)
-		if err != nil {
-			return nil, err
-		}
-		defer func() {
-			if err != nil {
-				conn.Close()
-			}
-		}()
-
-		var session *yamux.Session
-		sessionConfig := yamux.DefaultConfig()
-		// Disable keepAlive since we don't know how much time a container can be paused
-		sessionConfig.EnableKeepAlive = false
-		sessionConfig.ConnectionWriteTimeout = time.Second
-		session, err = yamux.Client(conn, sessionConfig)
-		if err != nil {
-			return nil, err
-		}
-
-
-		var stream net.Conn
-		stream, err = session.Open()
-		if err != nil {
-			return nil, err
-		}
-
-		y := &yamuxSessionStream{
-			Conn:    stream.(net.Conn),
-			session: session,
-		}
-
-		return y, nil
-	}
-}
 
 func unixDialer(sock string, timeout time.Duration) (net.Conn, error) {
 	if strings.HasPrefix(sock, "unix:") {
@@ -160,6 +88,7 @@ func unixDialer(sock string, timeout time.Duration) (net.Conn, error) {
 	}
 
 	dialFunc := func() (net.Conn, error) {
+		logrus.Infof("start net.DialTimeout sock:%v", sock)
 		return net.DialTimeout("unix", sock, timeout)
 	}
 
@@ -167,11 +96,7 @@ func unixDialer(sock string, timeout time.Duration) (net.Conn, error) {
 	return commonDialer(timeout, dialFunc, timeoutErr)
 }
 
-// This would bypass the grpc dialer backoff strategy and handle dial timeout
-// internally. Because we do not have a large number of concurrent dialers,
-// it is not reasonable to have such aggressive backoffs which would kill kata
-// containers boot up speed. For more information, see
-// https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md
+
 func commonDialer(timeout time.Duration, dialFunc func() (net.Conn, error), timeoutErrMsg error) (net.Conn, error) {
 	t := time.NewTimer(timeout)
 	cancel := make(chan bool)
@@ -180,9 +105,10 @@ func commonDialer(timeout time.Duration, dialFunc func() (net.Conn, error), time
 		for {
 			select {
 			case <-cancel:
-				// canceled or channel closed
+				logrus.Info("canceled or channel closed")
 				return
 			default:
+				logrus.Info("waiting...")
 			}
 
 			conn, err := dialFunc()
@@ -190,8 +116,10 @@ func commonDialer(timeout time.Duration, dialFunc func() (net.Conn, error), time
 				// Send conn back iff timer is not fired
 				// Otherwise there might be no one left reading it
 				if t.Stop() {
+					logrus.Info("commonDialer conn ok")
 					ch <- conn
 				} else {
+					logrus.Info("commonDialer conn close")
 					conn.Close()
 				}
 				return
@@ -212,32 +140,4 @@ func commonDialer(timeout time.Duration, dialFunc func() (net.Conn, error), time
 	}
 
 	return conn, nil
-}
-
-
-func parse(sock string) (string, *url.URL, error) {
-	addr, err := url.Parse(sock)
-	if err != nil {
-		return "", nil, err
-	}
-
-	var grpcAddr string
-	// validate more
-	switch addr.Scheme {
-	case unixSocketScheme:
-		fallthrough
-	case "":
-		if (addr.Host == "" && addr.Path == "") || addr.Port() != "" {
-			return "", nil, grpcStatus.Errorf(codes.InvalidArgument, "Invalid unix scheme: %s", sock)
-		}
-		if addr.Host == "" {
-			grpcAddr = unixSocketScheme + ":///" + addr.Path
-		} else {
-			grpcAddr = unixSocketScheme + ":///" + addr.Host + "/" + addr.Path
-		}
-	default:
-		return "", nil, grpcStatus.Errorf(codes.InvalidArgument, "Invalid scheme: %s", sock)
-	}
-
-	return grpcAddr, addr, nil
 }
