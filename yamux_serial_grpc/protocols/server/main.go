@@ -3,7 +3,7 @@ package main
 import (
 	"net"
 
-	pb "github.com/jimmy-xu/learn-yamux/multiplexing_serial_grpc/protocols/grpc"
+	pb "github.com/jimmy-xu/learn-yamux/yamux_serial_grpc/protocols/grpc"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -21,7 +21,7 @@ func (s *Server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloRe
 		logrus.Errorf("failed to get peer of client")
 	}
 	logrus.Printf("receive gRPC request: [%v] client:%v", in.Name, p.Addr.String())
-	return &pb.HelloResponse{Message: "Hello " + in.Name}, nil
+	return &pb.HelloResponse{Message: "Hello " + p.Addr.String() + " [from:" + in.Name+"]"}, nil
 }
 func main() {
 	listen, err := net.Listen("tcp", grpcPort)

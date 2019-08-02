@@ -31,7 +31,9 @@ func main()  {
 	}
 
 	if com == "" {
-		com = "COM1"
+		//com = "COM1"
+		//com = `\\.\agent.channel.0`
+		com = `\\.\Global\agent.channel.0`
 	}
 	logrus.Printf("connect to %v", com)
 
@@ -87,7 +89,7 @@ func (c *serialChannel) setup() error {
 	if err != nil {
 		return err
 	}
-
+	logrus.Infof("open serialport %v ok", c.serialPath)
 	c.serialConn = file
 
 	return nil
@@ -109,6 +111,7 @@ func (c *serialChannel) listen() (net.Listener, error) {
 	if err != nil {
 		return nil, err
 	}
+	logrus.Infof("init yamux server over serialport:%v ok", c.serialConn.Name())
 	c.waitCh = session.CloseChan()
 
 	return session, nil

@@ -1,75 +1,60 @@
 package main
 
 import (
+	"fmt"
 	"net"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/hashicorp/yamux"
 	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc/codes"
-	grpcStatus "google.golang.org/grpc/status"
 )
 
-func main()  {
+func main() {
+	fmt.Println("Starting serial demo - client")
 
 	sock := ""
-	if len(os.Args)>1 {
+	if len(os.Args) > 1 {
 		sock = os.Args[1]
 	}
 
 	if sock == "" {
-		sock = "/Users/xjimmy/Documents/antfin/serial/com1"
+		sock = "/run/vc/vm/eed8b7781ae14bda827245ac053d56666d22d4087211212e08e17c404f9681b1/kata.sock"
 	}
 	logrus.Printf("connect to %v", sock)
 
-	var defaultDialTimeout = 15 * time.Second
-
+	var defaultDialTimeout = 3 * time.Second
 
 	//use unix sock file
 	conn, err := unixDialer(sock, defaultDialTimeout)
 	if err != nil {
-		logrus.Fatalf("")
+		logrus.Fatalf("unix dialer failed, err:%v", err)
 	}
 	defer func() {
 		if err != nil {
 			conn.Close()
 		}
 	}()
+	logrus.Infof("unix dial ok")
 
-	var session *yamux.Session
-	sessionConfig := yamux.DefaultConfig()
-	// Disable keepAlive since we don't know how much time a container can be paused
-	sessionConfig.EnableKeepAlive = false
-	sessionConfig.ConnectionWriteTimeout = time.Second
-	session, err = yamux.Client(conn, sessionConfig)
-	if err != nil {
-		logrus.Fatalf("create yamux client failed, error:%v", err)
+	logrus.Info("===== send message to server =====")
+	for idx, item := range []string{"hello", "world", "ping"} {
+		if _, err := conn.Write([]byte(item)); err != nil {
+			logrus.Error("[%v]failed to send %v, error:%v", idx, item, err)
+		} else {
+			logrus.Infof("[%v]sent '%v'", idx, item)
+			time.Sleep(10 * time.Millisecond)
+		}
 	}
 
-	// 建立应用流通道1
-	stream1, _ := session.Open()
-	stream1.Write([]byte("ping" ))
-	stream1.Write([]byte("pnng" ))
-	time.Sleep(1 * time.Second)
-
-	// 建立应用流通道2
-	stream2, _ := session.Open()
-	stream2.Write([]byte("pong"))
-	time.Sleep(1 * time.Second)
-
-	// 清理退出
-	time.Sleep(5 * time.Second)
-
-	stream1.Close()
-	stream2.Close()
-
-	session.Close()
-
-	conn.Close()
+	logrus.Info("===== read message from server =====")
+	buf := make([]byte, 1024)
+	if n, err := conn.Read(buf); err != nil {
+		logrus.Error("failed to read from server, error:%v", err)
+	} else {
+		logrus.Infof("received :%s", buf[:n])
+	}
 }
-
 
 func unixDialer(sock string, timeout time.Duration) (net.Conn, error) {
 	if strings.HasPrefix(sock, "unix:") {
@@ -80,10 +65,8 @@ func unixDialer(sock string, timeout time.Duration) (net.Conn, error) {
 		return net.DialTimeout("unix", sock, timeout)
 	}
 
-	timeoutErr := grpcStatus.Errorf(codes.DeadlineExceeded, "timed out connecting to unix socket %s", sock)
-	return commonDialer(timeout, dialFunc, timeoutErr)
+	return commonDialer(timeout, dialFunc, fmt.Errorf("timed out connecting to unix socket %s", sock))
 }
-
 
 func commonDialer(timeout time.Duration, dialFunc func() (net.Conn, error), timeoutErrMsg error) (net.Conn, error) {
 	t := time.NewTimer(timeout)

@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	pb "github.com/jimmy-xu/learn-yamux/multiplexing_serial_grpc/protocols/grpc"
+	pb "github.com/jimmy-xu/learn-yamux/yamux_serial_grpc/protocols/grpc"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )

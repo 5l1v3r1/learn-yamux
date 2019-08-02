@@ -30,10 +30,11 @@ func main()  {
 	//use unix sock file
 	conn, err := unixDialer(sock, defaultDialTimeout)
 	if err != nil {
-		logrus.Fatalf("connect sock file failed")
-	} else {
-		logrus.Info("connect sock file ok")
+		logrus.Fatalf("unix dialer failed, err:%v", err)
 	}
+
+	logrus.Infof("unix dial ok")
+
 	defer func() {
 		if err != nil {
 			conn.Close()
@@ -50,34 +51,34 @@ func main()  {
 		logrus.Fatalf("create yamux client failed, error:%v", err)
 	}
 
+	logrus.Infof("create yamux client ok")
+
 	// 建立应用流通道1
-	stream1, _ := session.Open()
-	for i:=0; i<5; i++ {
-		logrus.Infof("%v stream1 send ping", i)
-		stream1.Write([]byte("ping" ))
-		time.Sleep(1 * time.Second)
+	stream1, err := session.Open()
+	if err != nil {
+		logrus.Fatalf("open session failed, err:%$v", err)
 	}
+
+	logrus.Info("send ping")
+	stream1.Write([]byte("ping" ))
+	stream1.Write([]byte("pnng" ))
+	time.Sleep(1 * time.Second)
 
 	// 建立应用流通道2
+	logrus.Info("send pong")
 	stream2, _ := session.Open()
-	for i:=0; i<5; i++ {
-		logrus.Infof("%v stream1 send pong", i)
-		stream2.Write([]byte("pong" ))
-		time.Sleep(1 * time.Second)
-	}
+	stream2.Write([]byte("pong"))
+	time.Sleep(1 * time.Second)
 
 	// 清理退出
-	time.Sleep(1 * time.Second)
-	logrus.Infof("close stream")
+	time.Sleep(5 * time.Second)
+
+	logrus.Info("close")
 	stream1.Close()
 	stream2.Close()
 
-	time.Sleep(5 * time.Second)
-	logrus.Infof("close session")
 	session.Close()
 
-	time.Sleep(10 * time.Second)
-	logrus.Infof("close conn")
 	conn.Close()
 }
 
@@ -88,7 +89,6 @@ func unixDialer(sock string, timeout time.Duration) (net.Conn, error) {
 	}
 
 	dialFunc := func() (net.Conn, error) {
-		logrus.Infof("start net.DialTimeout sock:%v", sock)
 		return net.DialTimeout("unix", sock, timeout)
 	}
 
@@ -105,10 +105,9 @@ func commonDialer(timeout time.Duration, dialFunc func() (net.Conn, error), time
 		for {
 			select {
 			case <-cancel:
-				logrus.Info("canceled or channel closed")
+				// canceled or channel closed
 				return
 			default:
-				logrus.Info("waiting...")
 			}
 
 			conn, err := dialFunc()
@@ -116,10 +115,8 @@ func commonDialer(timeout time.Duration, dialFunc func() (net.Conn, error), time
 				// Send conn back iff timer is not fired
 				// Otherwise there might be no one left reading it
 				if t.Stop() {
-					logrus.Info("commonDialer conn ok")
 					ch <- conn
 				} else {
-					logrus.Info("commonDialer conn close")
 					conn.Close()
 				}
 				return
