@@ -10,6 +10,10 @@ basic/yamux/server/server
 basic/yamux/client/client.exe
 basic/yamux/server/server.exe
 
+basic/grpc/client/client
+basic/grpc/server/server
+basic/grpc/client/client.exe
+basic/grpc/server/server.exe
 
 yamux_serial/client/client
 yamux_serial/client/client.exe
