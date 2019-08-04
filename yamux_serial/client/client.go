@@ -12,36 +12,38 @@ import (
 	grpcStatus "google.golang.org/grpc/status"
 )
 
-func main()  {
+func main() {
 
 	sock := ""
-	if len(os.Args)>1 {
+	if len(os.Args) > 1 {
 		sock = os.Args[1]
 	}
 
 	if sock == "" {
-		sock = "/Users/xjimmy/Documents/antfin/serial/com1"
+		sock = "/run/vc/vm/1cd65c2aefcb65ee2a2139373f4e041f35074b2d5a0f0c3f274ec2e9cdc18694/kata.sock"
 	}
 	logrus.Printf("connect to %v", sock)
 
 	var defaultDialTimeout = 15 * time.Second
 
-
 	//use unix sock file
-	conn, err := unixDialer(sock, defaultDialTimeout)
+	var (
+		conn    net.Conn
+		stream1 net.Conn
+		session *yamux.Session
+		err     error
+	)
+	conn, err = unixDialer(sock, defaultDialTimeout)
 	if err != nil {
 		logrus.Fatalf("unix dialer failed, err:%v", err)
 	}
-
+	defer conn.Close()
 	logrus.Infof("unix dial ok")
 
 	defer func() {
-		if err != nil {
-			conn.Close()
-		}
+		logrus.Infof("exit, error:%v", err)
 	}()
 
-	var session *yamux.Session
 	sessionConfig := yamux.DefaultConfig()
 	// Disable keepAlive since we don't know how much time a container can be paused
 	sessionConfig.EnableKeepAlive = false
@@ -50,38 +52,23 @@ func main()  {
 	if err != nil {
 		logrus.Fatalf("create yamux client failed, error:%v", err)
 	}
+	defer session.Close()
 
 	logrus.Infof("create yamux client ok")
 
 	// 建立应用流通道1
-	stream1, err := session.Open()
+	stream1, err = session.Open()
 	if err != nil {
 		logrus.Fatalf("open session failed, err:%$v", err)
 	}
+	defer stream1.Close()
 
 	logrus.Info("send ping")
-	stream1.Write([]byte("ping" ))
-	stream1.Write([]byte("pnng" ))
-	time.Sleep(1 * time.Second)
-
-	// 建立应用流通道2
-	logrus.Info("send pong")
-	stream2, _ := session.Open()
-	stream2.Write([]byte("pong"))
-	time.Sleep(1 * time.Second)
-
-	// 清理退出
-	time.Sleep(5 * time.Second)
-
-	logrus.Info("close")
-	stream1.Close()
-	stream2.Close()
-
-	session.Close()
-
-	conn.Close()
+	for i := 0; i < 120; i++ {
+		stream1.Write([]byte("ping"))
+		time.Sleep(1 * time.Second)
+	}
 }
-
 
 func unixDialer(sock string, timeout time.Duration) (net.Conn, error) {
 	if strings.HasPrefix(sock, "unix:") {
@@ -95,7 +82,6 @@ func unixDialer(sock string, timeout time.Duration) (net.Conn, error) {
 	timeoutErr := grpcStatus.Errorf(codes.DeadlineExceeded, "timed out connecting to unix socket %s", sock)
 	return commonDialer(timeout, dialFunc, timeoutErr)
 }
-
 
 func commonDialer(timeout time.Duration, dialFunc func() (net.Conn, error), timeoutErrMsg error) (net.Conn, error) {
 	t := time.NewTimer(timeout)

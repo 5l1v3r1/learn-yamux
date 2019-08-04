@@ -1,32 +1,42 @@
 package main
-// 多路复用
+
 import (
 	"fmt"
-	"github.com/hashicorp/yamux"
-	"github.com/sirupsen/logrus"
+	"io"
 	"net"
 	"os"
 	"time"
+
+	"github.com/hashicorp/yamux"
+	"github.com/sirupsen/logrus"
+
+	"github.com/jimmy-xu/learn-yamux/pkg/serial"
 )
 
-var channelCloseTimeout    = 5 * time.Second
+var channelCloseTimeout = 5 * time.Second
 
-func Recv(stream net.Conn, id int){
+func Recv(stream net.Conn, id int) {
+	logrus.Info("Recv")
 	for {
-		buf := make([]byte, 4)
+		buf := make([]byte, 1024)
 		n, err := stream.Read(buf)
-		if err == nil{
-			fmt.Println("ID:", id, ", len:", n, time.Now().Unix(), string(buf))
-		}else{
-			fmt.Println(time.Now().Unix(), err)
-			return
+		if err == nil {
+			logrus.Infof("Recv: [ID=%v] %s", id, string(buf[:n]))
+		} else {
+			if err == io.EOF {
+				logrus.Errorf("stop old stream")
+				break
+			} else {
+				logrus.Errorf("failed to read stream, error:%v", err)
+				break
+			}
 		}
 	}
 }
-func main()  {
+func main() {
 
 	com := ""
-	if len(os.Args)>1 {
+	if len(os.Args) > 1 {
 		com = os.Args[1]
 	}
 
@@ -36,7 +46,6 @@ func main()  {
 		com = `\\.\Global\agent.channel.0`
 	}
 	logrus.Printf("connect to %v", com)
-
 
 	logrus.Infof("start setup()")
 	var sCh = &serialChannel{}
@@ -52,16 +61,15 @@ func main()  {
 		logrus.WithError(err).Fatal("Failed to create agent grpc listener")
 	}
 
-	id :=0
+	id := 0
+	logrus.Println("session Accept")
 	for {
 		// 建立多个流通路
-		logrus.Println("session Accept")
 		stream, err := session.Accept()
 		if err == nil {
-			logrus.Println("Recv")
-			id ++
+			id++
 			go Recv(stream, id)
-		}else{
+		} else {
 			logrus.Println("session over.")
 			return
 		}
@@ -72,29 +80,26 @@ func main()  {
 	if err != nil {
 		logrus.WithError(err).Warn("agent grpc channel teardown failed")
 	}
-
-
 }
-
 
 type serialChannel struct {
 	serialPath string
-	serialConn *os.File
+	serialConn *serial.Port
 	waitCh     <-chan struct{}
 }
 
 func (c *serialChannel) setup() error {
 	// Open serial channel.
-	file, err := os.OpenFile(c.serialPath, os.O_RDWR, os.ModeDevice)
+	com := &serial.Config{Name: c.serialPath}
+	s, err := serial.OpenPort(com)
 	if err != nil {
-		return err
+		logrus.Fatalf("failed to open serial port %v, error:%v", c.serialPath, err)
 	}
-	logrus.Infof("open serialport %v ok", c.serialPath)
-	c.serialConn = file
+	logrus.Infof("open serial port %v ok", c.serialPath)
+	c.serialConn = s
 
-	return nil
+	return err
 }
-
 
 func (c *serialChannel) listen() (net.Listener, error) {
 	config := yamux.DefaultConfig()
@@ -111,7 +116,7 @@ func (c *serialChannel) listen() (net.Listener, error) {
 	if err != nil {
 		return nil, err
 	}
-	logrus.Infof("init yamux server over serialport:%v ok", c.serialConn.Name())
+	logrus.Infof("init yamux server over serialport:%v ok", c.serialPath)
 	c.waitCh = session.CloseChan()
 
 	return session, nil
@@ -130,8 +135,6 @@ func (c *serialChannel) teardown() error {
 	}
 	return c.serialConn.Close()
 }
-
-
 
 // yamuxWriter is a type responsible for logging yamux messages to the agent
 // log.
