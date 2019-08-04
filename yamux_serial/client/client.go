@@ -1,9 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"net"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/hashicorp/yamux"
@@ -13,6 +16,31 @@ import (
 )
 
 func main() {
+	var (
+		conn    net.Conn
+		session *yamux.Session
+		stream  net.Conn
+		err     error
+		done    chan bool
+	)
+
+	done = make(chan bool)
+
+	//创建监听退出chan
+	c := make(chan os.Signal)
+	//监听指定信号 ctrl+c kill
+	signal.Notify(c, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	go func() {
+		for s := range c {
+			switch s {
+			case syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
+				done <- false
+				logrus.Infof("interrupt, signal:%v [error:%v]", s.String(), err)
+			default:
+				logrus.Infof("other signal", s)
+			}
+		}
+	}()
 
 	sock := ""
 	if len(os.Args) > 1 {
@@ -24,15 +52,8 @@ func main() {
 	}
 	logrus.Printf("connect to %v", sock)
 
-	var defaultDialTimeout = 15 * time.Second
+	var defaultDialTimeout = 5 * time.Second
 
-	//use unix sock file
-	var (
-		conn    net.Conn
-		stream1 net.Conn
-		session *yamux.Session
-		err     error
-	)
 	conn, err = unixDialer(sock, defaultDialTimeout)
 	if err != nil {
 		logrus.Fatalf("unix dialer failed, err:%v", err)
@@ -41,7 +62,7 @@ func main() {
 	logrus.Infof("unix dial ok")
 
 	defer func() {
-		logrus.Infof("exit, error:%v", err)
+		logrus.Infof("exit with error:%v", err)
 	}()
 
 	sessionConfig := yamux.DefaultConfig()
@@ -57,16 +78,32 @@ func main() {
 	logrus.Infof("create yamux client ok")
 
 	// 建立应用流通道1
-	stream1, err = session.Open()
+	stream, err = session.Open()
 	if err != nil {
 		logrus.Fatalf("open session failed, err:%$v", err)
 	}
-	defer stream1.Close()
+	defer stream.Close()
 
-	logrus.Info("send ping")
-	for i := 0; i < 120; i++ {
-		stream1.Write([]byte("ping"))
-		time.Sleep(1 * time.Second)
+	go func() {
+		for i := 0; i < 3; i++ {
+			logrus.Infof("send ping_%v", i)
+			stream.Write([]byte(fmt.Sprintf("ping_%v", i)))
+			buf := make([]byte, 128)
+			if n, err := stream.Read(buf); err != nil {
+				logrus.Error("failed to receive response, error:%v", err)
+			} else {
+				logrus.Infof("receive response: [%v]", string(buf[:n]))
+			}
+			time.Sleep(1 * time.Second)
+		}
+		done <- true
+	}()
+
+	rlt := <-done
+	if rlt {
+		logrus.Infof("exit normal")
+	} else {
+		logrus.Warnf("exit abnormal")
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/yamux"
@@ -21,10 +22,15 @@ func Recv(stream net.Conn, id int) {
 		buf := make([]byte, 1024)
 		n, err := stream.Read(buf)
 		if err == nil {
-			logrus.Infof("Recv: [ID=%v] %s", id, string(buf[:n]))
+			msg := string(buf[:n])
+			logrus.Infof("recv [%s]", msg)
+			if _, err = stream.Write([]byte(fmt.Sprintf("pong_%v", strings.Split(msg, "_")[1]))); err != nil {
+				logrus.Errorf("failed to send response, error:%v", err)
+			}
+			logrus.Infof("send response [pong]")
 		} else {
 			if err == io.EOF {
-				logrus.Errorf("stop old stream")
+				logrus.Errorf("stream read EOF")
 				break
 			} else {
 				logrus.Errorf("failed to read stream, error:%v", err)
@@ -32,6 +38,8 @@ func Recv(stream net.Conn, id int) {
 			}
 		}
 	}
+	logrus.Infof("close stream")
+	stream.Close()
 }
 func main() {
 
@@ -48,31 +56,43 @@ func main() {
 	logrus.Printf("connect to %v", com)
 
 	logrus.Infof("start setup()")
-	var sCh = &serialChannel{}
+	var (
+		sCh = &serialChannel{}
+		err error
+	)
 	sCh.serialPath = com
-	err := sCh.setup()
-	if err != nil {
-		logrus.Fatalf("setup() failed, error:%v", err)
-	}
 
-	logrus.Infof("start listen()")
-	session, err := sCh.listen()
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create agent grpc listener")
-	}
-
-	id := 0
-	logrus.Println("session Accept")
 	for {
-		// 建立多个流通路
-		stream, err := session.Accept()
-		if err == nil {
-			id++
-			go Recv(stream, id)
-		} else {
-			logrus.Println("session over.")
-			return
+		err = sCh.setup()
+		if err != nil {
+			logrus.Fatalf("setup() failed, error:%v", err)
 		}
+
+		logrus.Infof("===== start listen() =====")
+		session, err := sCh.listen()
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to create agent grpc listener")
+		}
+
+		id := 0
+		logrus.Println("session Accept")
+		for {
+			// 建立多个流通路
+			stream, err := session.Accept()
+			if err == nil {
+				id++
+				go Recv(stream, id)
+			} else {
+				logrus.Println("session is over.")
+				break
+			}
+		}
+		logrus.Infof("session close")
+		session.Close()
+
+		sCh.teardown()
+
+		fmt.Println("<wait for new session>")
 	}
 
 	logrus.Infof("start teardown()")
