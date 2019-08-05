@@ -19,7 +19,7 @@ import (
 	"google.golang.org/grpc/codes"
 	grpcStatus "google.golang.org/grpc/status"
 
-	agentgrpc "github.com/jimmy-xu/learn-yamux/yamux_serial_grpc/protocols/grpc"
+	pb "github.com/jimmy-xu/learn-yamux/pkg/grpc/protos"
 )
 
 const (
@@ -28,48 +28,51 @@ const (
 )
 
 var (
-	defaultDialTimeout = 15 * time.Second
+	defaultDialTimeout  = 5 * time.Second
 	defaultCloseTimeout = 5 * time.Second
 
-	checkRequestTimeout   = 30 * time.Second
+	checkRequestTimeout = 5 * time.Second
 )
 
-
-func main()  {
+func main() {
 
 	sock := ""
-	if len(os.Args)>1 {
+	if len(os.Args) > 1 {
 		sock = os.Args[1]
 	}
 
 	if sock == "" {
-		sock = "/Users/xjimmy/Documents/antfin/serial/com1"
+		sock = "/run/vc/vm/1cd65c2aefcb65ee2a2139373f4e041f35074b2d5a0f0c3f274ec2e9cdc18694/kata.sock"
 	}
 	logrus.Printf("connect to %v", sock)
-
 
 	agent := &kataAgent{}
 	agent.state.URL = sock
 	agent.ctx = context.Background()
+	agent.keepConn = true
 
-	req := &agentgrpc.HelloRequest{Name:"world"}
-	resultingInterfaces, err := agent.sendReq(req)
-	if err != nil {
-		logrus.Fatalf("failed to send grpc request")
+	for i := 0; i < 3; i++ {
+		logrus.Println()
+		logrus.Infof("===== send request %v =====", i)
+		req := &pb.HelloRequest{Name: "world"}
+		resultingInterfaces, err := agent.sendReq(req)
+		if err != nil {
+			logrus.Warnf("failed to send grpc request, error:%v", err)
+			continue
+		}
+		resultInterfaces, ok := resultingInterfaces.(*pb.HelloResponse)
+		if !ok {
+			logrus.Fatalf("failed to get result, ok:%v", ok)
+		}
+		logrus.Infof("response:%v", resultInterfaces.Message)
 	}
-	resultInterfaces, ok := resultingInterfaces.(*agentgrpc.HelloResponse)
-	if !ok {
-		logrus.Fatalf("failed to get result, ok:%v", ok)
-	}
-	logrus.Infof("response:%v", resultInterfaces.Message)
-
+	logrus.Infof("done")
 
 }
 
-
-// AgentClient is an agent gRPC client connection wrapper for agentgrpc.AgentServiceClient
+// AgentClient is an agent gRPC client connection wrapper for pb.AgentServiceClient
 type AgentClient struct {
-	agentgrpc.GreeterClient
+	pb.GreeterClient
 	conn *grpc.ClientConn
 }
 
@@ -89,24 +92,22 @@ func NewAgentClient(ctx context.Context, sock string, enableYamux bool) (*AgentC
 
 	logrus.Infof("before grpc.DialContext: grpcAddr:%v", grpcAddr)
 	conn, err := grpc.DialContext(ctx, grpcAddr, dialOpts...)
-	logrus.Infof("after grpc.DialContext: grpcAddr:%v", grpcAddr)
+	logrus.Infof("after grpc.DialContext: grpcAddr:%v, error:%v", grpcAddr, err)
 	if err != nil {
 		return nil, err
 	}
 
 	logrus.Infof("grpc.DialContext ok")
 	return &AgentClient{
-		GreeterClient: agentgrpc.NewGreeterClient(conn),
-		conn:               conn,
+		GreeterClient: pb.NewGreeterClient(conn),
+		conn:          conn,
 	}, nil
 }
-
 
 // Close an existing connection to the agent gRPC server.
 func (c *AgentClient) Close() error {
 	return c.conn.Close()
 }
-
 
 func unixDialer(sock string, timeout time.Duration) (net.Conn, error) {
 	logrus.Infof("start unixDialer()")
@@ -122,7 +123,6 @@ func unixDialer(sock string, timeout time.Duration) (net.Conn, error) {
 	timeoutErr := grpcStatus.Errorf(codes.DeadlineExceeded, "timed out connecting to unix socket %s", sock)
 	return commonDialer(timeout, dialFunc, timeoutErr)
 }
-
 
 func commonDialer(timeout time.Duration, dialFunc func() (net.Conn, error), timeoutErrMsg error) (net.Conn, error) {
 	t := time.NewTimer(timeout)
@@ -169,7 +169,6 @@ func commonDialer(timeout time.Duration, dialFunc func() (net.Conn, error), time
 
 	return conn, nil
 }
-
 
 func parse(sock string) (string, *url.URL, error) {
 	addr, err := url.Parse(sock)
@@ -251,10 +250,9 @@ func agentDialer(addr *url.URL, enableYamux bool) dialer {
 			return nil, err
 		}
 
-
 		var stream net.Conn
 		logrus.Infof("start create yamux stream")
-		stream, err = session.Open()
+		stream, err = session.OpenStream()
 		if err != nil {
 			logrus.Infof("yamux create stream failed, error:%v", err)
 			return nil, err
@@ -269,7 +267,6 @@ func agentDialer(addr *url.URL, enableYamux bool) dialer {
 		return y, nil
 	}
 }
-
 
 type yamuxSessionStream struct {
 	net.Conn
@@ -319,18 +316,18 @@ type kataAgent struct {
 }
 
 func (k *kataAgent) connect() error {
-	logrus.Infof("start ssconnect")
-
-	// lockless quick pass
-	if k.client != nil {
-		return nil
-	}
+	logrus.Infof("start connect")
 
 	// This is for the first connection only, to prevent race
 	k.Lock()
 	defer k.Unlock()
+
+	// lockless quick pass
 	if k.client != nil {
+		logrus.Infof("use exist kata agent client")
 		return nil
+	} else {
+		logrus.Infof("client is nil, create a new one")
 	}
 
 	kataURL := k.state.URL
@@ -340,13 +337,11 @@ func (k *kataAgent) connect() error {
 		k.ctx = context.Background()
 	}
 
-
 	logrus.Infof("NewAgentClient, kataURL: %v", kataURL)
 	client, err := NewAgentClient(k.ctx, kataURL, true)
 	if err != nil {
 		return err
 	}
-
 
 	k.installReqFunc(client)
 	k.client = client
@@ -361,10 +356,9 @@ func (k *kataAgent) installReqFunc(c *AgentClient) {
 
 	k.reqHandlers = make(map[string]reqFunc)
 	k.reqHandlers["grpc.SayHello"] = func(ctx context.Context, req interface{}, opts ...grpc.CallOption) (interface{}, error) {
-		return k.client.SayHello(ctx, req.(*agentgrpc.HelloRequest), opts...)
+		return k.client.SayHello(ctx, req.(*pb.HelloRequest), opts...)
 	}
 }
-
 
 func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
 	logrus.Infof("start sendReq")
@@ -376,7 +370,13 @@ func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
 		defer k.disconnect()
 	}
 
+	logrus.Infof("reqHandlers:%v", k.reqHandlers)
+	logrus.Infof("request:%v", request)
+
 	msgName := proto.MessageName(request.(proto.Message))
+	if msgName == "" {
+		msgName = "grpc.SayHello"
+	}
 	logrus.Infof("get handler for %v", msgName)
 	handler := k.reqHandlers[msgName]
 	if msgName == "" || handler == nil {
@@ -388,7 +388,6 @@ func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
 	logrus.Info("call handler")
 	return handler(k.ctx, request)
 }
-
 
 func (k *kataAgent) disconnect() error {
 	k.Lock()
