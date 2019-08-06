@@ -44,7 +44,7 @@ func main() {
 	if sock == "" {
 		sock = "/run/vc/vm/1cd65c2aefcb65ee2a2139373f4e041f35074b2d5a0f0c3f274ec2e9cdc18694/kata.sock"
 	}
-	logrus.Printf("connect to %v", sock)
+	//logrus.Debugf("connect to %v", sock)
 
 	agent := &kataAgent{}
 	agent.state.URL = sock
@@ -54,22 +54,24 @@ func main() {
 	for i := 0; i < 3; i++ {
 		logrus.Println()
 		logrus.Infof("===== send request %v =====", i)
-		req := &pb.HelloRequest{Name: "world"}
+		req := &pb.HelloRequest{Name: fmt.Sprintf("world %v", i)}
 		resultingInterfaces, err := agent.sendReq(req)
 		if err != nil {
 			logrus.Warnf("failed to send grpc request, error:%v", err)
 			continue
 		}
+		logrus.Infof("sent request: %v", req)
 		resultInterfaces, ok := resultingInterfaces.(*pb.HelloResponse)
 		if !ok {
 			logrus.Fatalf("failed to get result, ok:%v", ok)
 		}
-		logrus.Infof("response:%v", resultInterfaces.Message)
+		logrus.Infof("receive response: %v", resultInterfaces.Message)
 	}
 
 	if err := agent.disconnect(); err != nil {
 		logrus.Fatalf("exit with error:%v", err)
 	}
+	logrus.Println()
 	logrus.Infof("done")
 	time.Sleep(1 * time.Second)
 }
@@ -86,7 +88,7 @@ func NewAgentClient(ctx context.Context, sock string, enableYamux bool) (*AgentC
 		return nil, err
 	}
 
-	logrus.Infof("grpcAddr:%v parsedAddr:%v", grpcAddr, parsedAddr)
+	logrus.Debugf("grpcAddr:%v parsedAddr:%v", grpcAddr, parsedAddr)
 
 	dialOpts := []grpc.DialOption{grpc.WithInsecure(), grpc.WithBlock()}
 	dialOpts = append(dialOpts, grpc.WithDialer(agentDialer(parsedAddr, enableYamux)))
@@ -94,14 +96,13 @@ func NewAgentClient(ctx context.Context, sock string, enableYamux bool) (*AgentC
 	ctx, cancel := context.WithTimeout(ctx, defaultDialTimeout)
 	defer cancel()
 
-	logrus.Infof("before grpc.DialContext: grpcAddr:%v", grpcAddr)
+	logrus.Debugf("before grpc.DialContext: grpcAddr:%v", grpcAddr)
 	conn, err := grpc.DialContext(ctx, grpcAddr, dialOpts...)
-	logrus.Infof("after grpc.DialContext: grpcAddr:%v, error:%v", grpcAddr, err)
 	if err != nil {
 		return nil, err
 	}
 
-	logrus.Infof("grpc.DialContext ok")
+	logrus.Infof("grpc connection ok")
 	return &AgentClient{
 		GreeterClient: pb.NewGreeterClient(conn),
 		conn:          conn,
@@ -110,18 +111,18 @@ func NewAgentClient(ctx context.Context, sock string, enableYamux bool) (*AgentC
 
 // Close an existing connection to the agent gRPC server.
 func (c *AgentClient) Close() error {
-	logrus.Infof("agent close")
+	logrus.Debugf("agent close")
 	return c.conn.Close()
 }
 
 func unixDialer(sock string, timeout time.Duration) (net.Conn, error) {
-	logrus.Infof("start unixDialer()")
+	logrus.Debugf("start unixDialer()")
 	if strings.HasPrefix(sock, "unix:") {
 		sock = strings.Trim(sock, "unix:")
 	}
 
 	dialFunc := func() (net.Conn, error) {
-		logrus.Infof("start net.DialTimeout sock:%v timeout:%v", sock, timeout)
+		logrus.Debugf("start net.DialTimeout sock:%v timeout:%v", sock, timeout)
 		return net.DialTimeout("unix", sock, timeout)
 	}
 
@@ -140,15 +141,15 @@ func commonDialer(timeout time.Duration, dialFunc func() (net.Conn, error), time
 				logrus.Info("canceled or channel closed")
 				return
 			default:
-				logrus.Info("waiting...")
+				logrus.Debugf("waiting...")
 			}
 
 			conn, err := dialFunc()
 			if err == nil {
-				// Send conn back iff timer is not fired
+				// Send conn back if timer is not fired
 				// Otherwise there might be no one left reading it
 				if t.Stop() {
-					logrus.Info("commonDialer conn ok")
+					logrus.Debugf("commonDialer conn ok")
 					ch <- conn
 				} else {
 					logrus.Info("commonDialer conn close")
@@ -166,7 +167,7 @@ func commonDialer(timeout time.Duration, dialFunc func() (net.Conn, error), time
 		if !ok {
 			return nil, timeoutErrMsg
 		}
-		logrus.Infof("receive conn ok")
+		logrus.Infof("unix socket connected")
 	case <-t.C:
 		cancel <- true
 		return nil, timeoutErrMsg
@@ -216,7 +217,7 @@ func parse(sock string) (string, *url.URL, error) {
 type dialer func(string, time.Duration) (net.Conn, error)
 
 func agentDialer(addr *url.URL, enableYamux bool) dialer {
-	logrus.Info("start agentDialer()")
+	logrus.Debugf("start agentDialer()")
 	var d dialer
 	switch addr.Scheme {
 	case unixSocketScheme:
@@ -229,11 +230,11 @@ func agentDialer(addr *url.URL, enableYamux bool) dialer {
 		return d
 	}
 
-	logrus.Info("return yamux dialer")
+	logrus.Debugf("return yamux dialer")
 
 	// yamux dialer
 	return func(sock string, timeout time.Duration) (net.Conn, error) {
-		logrus.Infof("start yamux dialer, sock:%v timeout:%v", sock, timeout)
+		logrus.Debugf("start yamux dialer, sock:%v timeout:%v", sock, timeout)
 		conn, err := d(sock, timeout)
 		if err != nil {
 			return nil, err
@@ -249,21 +250,21 @@ func agentDialer(addr *url.URL, enableYamux bool) dialer {
 		// Disable keepAlive since we don't know how much time a container can be paused
 		sessionConfig.EnableKeepAlive = false
 		sessionConfig.ConnectionWriteTimeout = time.Second
-		logrus.Infof("create yamux client")
+		logrus.Infof("create yamux session")
 		session, err = yamux.Client(conn, sessionConfig)
 		if err != nil {
 			return nil, err
 		}
 
 		var stream net.Conn
-		logrus.Infof("start create yamux stream")
+		logrus.Infof("create yamux stream")
 		stream, err = session.OpenStream()
 		if err != nil {
-			logrus.Infof("yamux create stream failed, error:%v", err)
+			logrus.Errorf("failed to create yamux stream, error:%v", err)
 			return nil, err
 		}
 
-		logrus.Infof("yamux create stream ok")
+		logrus.Debugf("yamux create stream ok")
 		y := &yamuxSessionStream{
 			Conn:    stream.(net.Conn),
 			session: session,
@@ -279,8 +280,7 @@ type yamuxSessionStream struct {
 }
 
 func (y *yamuxSessionStream) Close() error {
-	logrus.Infof("yamux session close - begin")
-	defer logrus.Infof("yamux session close - end")
+	logrus.Infof("yamux session close")
 	waitCh := y.session.CloseChan()
 	timeout := time.NewTimer(defaultCloseTimeout)
 
@@ -323,7 +323,7 @@ type kataAgent struct {
 }
 
 func (k *kataAgent) connect() error {
-	logrus.Infof("start connect")
+	logrus.Debugf("start connect")
 
 	// This is for the first connection only, to prevent race
 	k.Lock()
@@ -344,7 +344,7 @@ func (k *kataAgent) connect() error {
 		k.ctx = context.Background()
 	}
 
-	logrus.Infof("NewAgentClient, kataURL: %v", kataURL)
+	logrus.Debugf("NewAgentClient, kataURL: %v", kataURL)
 	client, err := NewAgentClient(k.ctx, kataURL, true)
 	if err != nil {
 		return err
@@ -359,7 +359,7 @@ func (k *kataAgent) connect() error {
 type reqFunc func(context.Context, interface{}, ...grpc.CallOption) (interface{}, error)
 
 func (k *kataAgent) installReqFunc(c *AgentClient) {
-	logrus.Info("start installReqFunc")
+	logrus.Debugf("start installReqFunc")
 
 	k.reqHandlers = make(map[string]reqFunc)
 	k.reqHandlers["grpc.SayHello"] = func(ctx context.Context, req interface{}, opts ...grpc.CallOption) (interface{}, error) {
@@ -368,23 +368,23 @@ func (k *kataAgent) installReqFunc(c *AgentClient) {
 }
 
 func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
-	logrus.Infof("start sendReq")
+	logrus.Debugf("start sendReq")
 	if err := k.connect(); err != nil {
 		return nil, err
 	}
-	logrus.Infof("connect ok")
+	logrus.Debugf("connect ok")
 	if !k.keepConn {
 		defer k.disconnect()
 	}
 
-	logrus.Infof("reqHandlers:%v", k.reqHandlers)
-	logrus.Infof("request:%v", request)
+	logrus.Debugf("reqHandlers:%v", k.reqHandlers)
+	logrus.Debugf("request:%v", request)
 
 	msgName := proto.MessageName(request.(proto.Message))
 	if msgName == "" {
 		msgName = "grpc.SayHello"
 	}
-	logrus.Infof("get handler for %v", msgName)
+	logrus.Debugf("get handler for %v", msgName)
 	handler := k.reqHandlers[msgName]
 	if msgName == "" || handler == nil {
 		return nil, errors.New("Invalid request type")
@@ -392,7 +392,7 @@ func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
 	message := request.(proto.Message)
 	logrus.WithField("name", msgName).WithField("req", message.String()).Debug("sending request")
 
-	logrus.Info("call handler")
+	logrus.Debugf("call handler")
 	return handler(k.ctx, request)
 }
 

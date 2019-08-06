@@ -458,7 +458,7 @@ func (s *Session) recvLoop() error {
 		if _, err := io.ReadFull(s.bufRead, hdr); err != nil {
 			//patch for serial in windows
 			if strings.Contains(err.Error(), "Insufficient system resources exist to complete the requested service") {
-				s.logger.Printf("wait...")
+				//s.logger.Printf("wait...")
 				time.Sleep(3 * time.Second)
 				continue
 			}

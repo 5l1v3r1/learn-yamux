@@ -28,7 +28,7 @@ func (s *Server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloRe
 	//if !ok {
 	//	logrus.Errorf("failed to get peer of client")
 	//}
-	logrus.Printf("handle SayHello: [%v]", in)
+	logrus.Infof("handle SayHello: [%v]", in)
 	return &pb.HelloResponse{Message: "Hello " + in.Name}, nil
 }
 
@@ -171,9 +171,9 @@ func (yw yamuxWriter) Write(bytes []byte) (int, error) {
 }
 
 func makeUnaryInterceptor() grpc.UnaryServerInterceptor {
-	logrus.Infof("return makeUnaryInterceptor()")
+	logrus.Debugf("makeUnaryInterceptor")
 	return func(origCtx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
-		logrus.Infof("start makeUnaryInterceptor()")
+		logrus.Debugf("start makeUnaryInterceptor()")
 		var start time.Time
 		var elapsed time.Duration
 		var message proto.Message
@@ -183,11 +183,12 @@ func makeUnaryInterceptor() grpc.UnaryServerInterceptor {
 		// Just log call details
 		message = req.(proto.Message)
 
-		logrus.Infof("message: %v", message.String())
+		logrus.Debugf("message: %v", message.String())
 
 		logrus.WithFields(logrus.Fields{
 			"request": grpcCall,
-			"req":     message.String()}).Infof("new request")
+			"req":     message.String()}).Debugf("new request")
+
 		start = time.Now()
 
 		// Use the context which will provide the correct trace
@@ -199,11 +200,10 @@ func makeUnaryInterceptor() grpc.UnaryServerInterceptor {
 		elapsed = time.Since(start)
 		message = resp.(proto.Message)
 
-		logger := logrus.WithFields(logrus.Fields{
+		logrus.WithFields(logrus.Fields{
 			"request":  info.FullMethod,
 			"duration": elapsed.String(),
-			"resp":     message.String()})
-		logger.Infof("request end")
+			"resp":     message.String()}).Debug("request end")
 
 		return resp, err
 	}
