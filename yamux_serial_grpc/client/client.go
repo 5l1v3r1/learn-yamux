@@ -66,8 +66,12 @@ func main() {
 		}
 		logrus.Infof("response:%v", resultInterfaces.Message)
 	}
-	logrus.Infof("done")
 
+	if err := agent.disconnect(); err != nil {
+		logrus.Fatalf("exit with error:%v", err)
+	}
+	logrus.Infof("done")
+	time.Sleep(1 * time.Second)
 }
 
 // AgentClient is an agent gRPC client connection wrapper for pb.AgentServiceClient
@@ -106,6 +110,7 @@ func NewAgentClient(ctx context.Context, sock string, enableYamux bool) (*AgentC
 
 // Close an existing connection to the agent gRPC server.
 func (c *AgentClient) Close() error {
+	logrus.Infof("agent close")
 	return c.conn.Close()
 }
 
@@ -274,6 +279,8 @@ type yamuxSessionStream struct {
 }
 
 func (y *yamuxSessionStream) Close() error {
+	logrus.Infof("yamux session close - begin")
+	defer logrus.Infof("yamux session close - end")
 	waitCh := y.session.CloseChan()
 	timeout := time.NewTimer(defaultCloseTimeout)
 

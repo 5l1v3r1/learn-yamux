@@ -3,18 +3,16 @@ package main
 import (
 	"context"
 	"fmt"
-	"google.golang.org/grpc"
 	"net"
 	"os"
 	"time"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/hashicorp/yamux"
-	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc/peer"
-
 	pb "github.com/jimmy-xu/learn-yamux/pkg/grpc/protos"
 	"github.com/jimmy-xu/learn-yamux/pkg/serial"
+	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
 )
 
 var (
@@ -26,11 +24,11 @@ type Server struct{}
 
 func (s *Server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloResponse, error) {
 	//get client info
-	p, ok := peer.FromContext(ctx)
-	if !ok {
-		logrus.Errorf("failed to get peer of client")
-	}
-	logrus.Printf("receive gRPC request: [%v] [%v]", in, p)
+	//p, ok := peer.FromContext(ctx)
+	//if !ok {
+	//	logrus.Errorf("failed to get peer of client")
+	//}
+	logrus.Printf("handle SayHello: [%v]", in)
 	return &pb.HelloResponse{Message: "Hello " + in.Name}, nil
 }
 
@@ -54,6 +52,9 @@ func main() {
 		err error
 	)
 	sCh.serialPath = com
+
+	//save context
+	grpcContext = context.Background()
 
 	for {
 		err = sCh.setup()
@@ -80,7 +81,7 @@ func main() {
 		logrus.Infof("start grpc server")
 		servErr = grpcServer.Serve(session)
 		if servErr != nil {
-			logrus.Fatalf("failed to start grpc server, error:%v", servErr)
+			logrus.Warnf("grpc server exited with error:%v", servErr)
 		}
 
 		logrus.Infof("session close")
@@ -182,9 +183,11 @@ func makeUnaryInterceptor() grpc.UnaryServerInterceptor {
 		// Just log call details
 		message = req.(proto.Message)
 
+		logrus.Infof("message: %v", message.String())
+
 		logrus.WithFields(logrus.Fields{
 			"request": grpcCall,
-			"req":     message.String()}).Debug("new request")
+			"req":     message.String()}).Infof("new request")
 		start = time.Now()
 
 		// Use the context which will provide the correct trace
@@ -200,7 +203,7 @@ func makeUnaryInterceptor() grpc.UnaryServerInterceptor {
 			"request":  info.FullMethod,
 			"duration": elapsed.String(),
 			"resp":     message.String()})
-		logger.Debug("request end")
+		logger.Infof("request end")
 
 		return resp, err
 	}
