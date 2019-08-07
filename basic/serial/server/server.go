@@ -26,7 +26,7 @@ func main() {
 	if err != nil {
 		logrus.Fatalf("failed to open serial port %v, error:%v", serialPort, err)
 	}
-	fmt.Printf("open serial port %v ok", serialPort)
+	fmt.Printf("open serial port %v ok\n", serialPort)
 
 	ch := make(chan int, 1)
 	go func() {

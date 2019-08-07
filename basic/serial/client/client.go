@@ -19,7 +19,7 @@ func main() {
 	}
 
 	if sock == "" {
-		sock = "/run/vc/vm/eed8b7781ae14bda827245ac053d56666d22d4087211212e08e17c404f9681b1/kata.sock"
+		sock = "/run/vc/vm/1cd65c2aefcb65ee2a2139373f4e041f35074b2d5a0f0c3f274ec2e9cdc18694/kata.sock"
 	}
 	logrus.Printf("connect to %v", sock)
 
