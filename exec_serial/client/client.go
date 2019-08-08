@@ -27,9 +27,18 @@ func main() {
 
 	var defaultDialTimeout = 3 * time.Second
 
+	sandboxId := ""
+	if len(os.Args) > 1 {
+		sandboxId = os.Args[1]
+	}
+
+	if sandboxId == "" {
+		sandboxId = "484f462569870270b242f9b2d9565ad75003ea5f738df8b0b2792abb6121e841"
+	}
+
 	////////////////////////////////////////////////////////////
 	//use unix kataSock file
-	kataSock := "/run/vc/vm/1cd65c2aefcb65ee2a2139373f4e041f35074b2d5a0f0c3f274ec2e9cdc18694/kata.sock"
+	kataSock := fmt.Sprintf("/run/vc/vm/%v/kata.sock", sandboxId)
 	kataConn, err := unixDialer(kataSock, defaultDialTimeout)
 	if err != nil {
 		logrus.Fatalf("unix dialer failed, err:%v", err)
@@ -37,7 +46,7 @@ func main() {
 	logrus.Infof("[write] unix dial %v ok", kataSock)
 
 	////////////////////////////////////////////////////////////
-	consoleSock := "/run/vc/vm/1cd65c2aefcb65ee2a2139373f4e041f35074b2d5a0f0c3f274ec2e9cdc18694/console.sock"
+	consoleSock := fmt.Sprintf("/run/vc/vm/%v/console.sock", sandboxId)
 	consoleConn, err := unixDialer(consoleSock, defaultDialTimeout)
 	if err != nil {
 		logrus.Fatalf("unix dialer failed, err:%v", err)
@@ -56,6 +65,7 @@ func main() {
 		logrus.Infof("%v closed", consoleSock)
 	}()
 
+	fmt.Printf("<enter 'exit' to quit>\n")
 	fmt.Printf(`C:\Users\admin>`)
 
 	//read
@@ -76,9 +86,14 @@ func main() {
 	for {
 		bio := bufio.NewReader(os.Stdin)
 		buf, _, _ := bio.ReadLine()
+		if string(buf) == "exit" {
+			break
+		}
 		buf = append(buf, '\n')
 		kataConn.Write(buf)
 	}
+
+	logrus.Infof("bye")
 }
 
 func unixDialer(sock string, timeout time.Duration) (net.Conn, error) {
