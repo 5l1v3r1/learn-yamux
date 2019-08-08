@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -71,14 +72,24 @@ func main() {
 				logrus.Infof("execute cmd:%v", cmd.Args)
 
 				stdout, _ := cmd.StdoutPipe()
+				stderr, _ := cmd.StderrPipe()
 				cmd.Start()
-				rlt := make([]byte, 1024)
+				oRlt := make([]byte, 1024)
+				eRlt := make([]byte, 1024)
 				for {
-					n, err := stdout.Read(rlt)
-					if err != nil {
-						break
+					oN, oErr := stdout.Read(oRlt)
+					if oN > 0 {
+						c.Write([]byte(fmt.Sprintf("%s", oRlt[:oN])))
 					}
-					c.Write([]byte(fmt.Sprintf("%s", rlt[:n])))
+					if oErr != nil {
+						eN, eErr := stderr.Read(eRlt)
+						if oErr == io.EOF && eErr == io.EOF {
+							break
+						}
+						if eN > 0 {
+							c.Write([]byte(fmt.Sprintf("%s", eRlt[:eN])))
+						}
+					}
 				}
 				logrus.Infof("finish execute cmd:%v", cmd.Args)
 			}
