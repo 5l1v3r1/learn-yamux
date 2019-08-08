@@ -1,5 +1,5 @@
-basic serial example:  client with socket, server with serialport
-=================================================================
+basic serial demo:  client with socket, server with serialport
+==============================================================
 
 # qemu parameter
 

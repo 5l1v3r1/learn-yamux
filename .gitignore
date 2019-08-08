@@ -1,31 +1,31 @@
 .idea
 
-basic/serial/client/client
-basic/serial/server/server
-basic/serial/client/client.exe
-basic/serial/server/server.exe
+basic/grpc/client/client
+basic/grpc/server/server
+basic/grpc/client/client.exe
+basic/grpc/server/server.exe
 
 basic/yamux/client/client
 basic/yamux/server/server
 basic/yamux/client/client.exe
 basic/yamux/server/server.exe
 
-basic/grpc/client/client
-basic/grpc/server/server
-basic/grpc/client/client.exe
-basic/grpc/server/server.exe
+basic/serial/client/client
+basic/serial/server/server
+basic/serial/client/client.exe
+basic/serial/server/server.exe
 
-basic/remote_exec/client/client
-basic/remote_exec/server/server
-basic/remote_exec/client/client.exe
-basic/remote_exec/server/server.exe
+exec_serial/client/client
+exec_serial/server/server
+exec_serial/client/client.exe
+exec_serial/server/server.exe
 
 yamux_serial/client/client
 yamux_serial/client/client.exe
 yamux_serial/server/server
 yamux_serial/server/server.exe
 
-yamux_serial_grpc/client/client
-yamux_serial_grpc/client/client.exe
-yamux_serial_grpc/server/server
-yamux_serial_grpc/server/server.exe
+yamux_grpc_serial/client/client
+yamux_grpc_serial/client/client.exe
+yamux_grpc_serial/server/server
+yamux_grpc_serial/server/server.exe

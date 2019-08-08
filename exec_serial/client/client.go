@@ -23,7 +23,7 @@ const (
 )
 
 func main() {
-	fmt.Println("Starting remote_exec demo - client")
+	fmt.Println("Starting exec_serial demo - client")
 
 	var defaultDialTimeout = 3 * time.Second
 
@@ -34,7 +34,7 @@ func main() {
 	if err != nil {
 		logrus.Fatalf("unix dialer failed, err:%v", err)
 	}
-	logrus.Infof("unix dial %v ok", kataSock)
+	logrus.Infof("[write] unix dial %v ok", kataSock)
 
 	////////////////////////////////////////////////////////////
 	consoleSock := "/run/vc/vm/1cd65c2aefcb65ee2a2139373f4e041f35074b2d5a0f0c3f274ec2e9cdc18694/console.sock"
@@ -42,7 +42,7 @@ func main() {
 	if err != nil {
 		logrus.Fatalf("unix dialer failed, err:%v", err)
 	}
-	logrus.Infof("unix dial %v ok", consoleSock)
+	logrus.Infof("[read] unix dial %v ok", consoleSock)
 
 	////////////////////////////////////////////////////////////
 	defer func() {
@@ -56,8 +56,9 @@ func main() {
 		logrus.Infof("%v closed", consoleSock)
 	}()
 
+	fmt.Printf(`C:\Users\admin>`)
+
 	//read
-	fmt.Printf(`c:\>`)
 	go func() {
 		for {
 			rlt := make([]byte, 1024)
@@ -65,7 +66,6 @@ func main() {
 				if err == io.EOF {
 					fmt.Printf("[%v] %s", err, convertByte2String(rlt[:n], GB18030))
 				}
-				fmt.Printf(`c:\>`)
 			} else {
 				fmt.Printf("%s", convertByte2String(rlt[:n], GB18030))
 			}

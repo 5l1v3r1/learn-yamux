@@ -1,5 +1,5 @@
-one session， multiple stream
-=============================
+basic yamux demo: one session， multiple stream
+===============================================
 
 # server
 

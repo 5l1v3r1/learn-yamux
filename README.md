@@ -6,11 +6,11 @@ example for yamux + serial + grpc
 .
 ├── basic
 │   ├── grpc             # basic example for grpc
-│   ├── remote_exec      # remote exec command(base on serial)
 │   ├── serial           # basic example for serial
 │   └── yamux            # basic example for yamux
-├── yamux_serial         # example for yamux + serial
-└── yamux_serial_grpc    # example for yamux + serial + grpc(WIP)
+├── exec_serial          # remote exec command over serial
+├── yamux_serial         # example for yamux over serial
+└── yamux_grpc_serial    # example for yamux + grpc over serial
 ```
 
 # manage vendor

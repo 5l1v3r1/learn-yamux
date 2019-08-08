@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-	fmt.Println("Starting remote_exec demo - server")
+	fmt.Println("Starting exec_serial demo - server")
 
 	////////////////////////////////////////////////
 	//kata.sock
@@ -29,7 +29,7 @@ func main() {
 	if err != nil {
 		logrus.Fatalf("failed to open serial port %v, error:%v", kataPort, err)
 	}
-	fmt.Printf("open serial port %v ok\n", kataPort)
+	fmt.Printf("[read] open serial port %v ok\n", kataPort)
 
 	////////////////////////////////////////////////
 	//console.sock
@@ -40,7 +40,7 @@ func main() {
 	if err != nil {
 		logrus.Fatalf("failed to open console port %v, error:%v", consolePort, err)
 	}
-	fmt.Printf("open console port %v ok\n", consolePort)
+	fmt.Printf("[write] open serial port %v ok\n", consolePort)
 
 	ch := make(chan int, 1)
 	go func() {
@@ -91,6 +91,9 @@ func main() {
 						}
 					}
 				}
+
+				c.Write([]byte(`C:\Users\admin>`))
+
 				logrus.Infof("finish execute cmd:%v", cmd.Args)
 			}
 

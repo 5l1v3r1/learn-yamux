@@ -28,7 +28,7 @@ type Stream struct {
 
 func main() {
 	listenAddr := "0.0.0.0:4444"
-	fmt.Println("[main]Starting yamux demo")
+	fmt.Println("[main]Starting yamux demo - server")
 	done := make(chan bool, 0)
 
 	server := NewServer(listenAddr, done)
