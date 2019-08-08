@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"golang.org/x/text/encoding/simplifiedchinese"
+	"io"
 	"net"
 	"os"
 	"strings"
@@ -56,12 +57,15 @@ func main() {
 	}()
 
 	//read
+	fmt.Printf(`c:\>`)
 	go func() {
 		for {
-			fmt.Printf(`c:\>`)
 			rlt := make([]byte, 1024)
 			if n, err := consoleConn.Read(rlt); err != nil {
-				fmt.Printf("%s", rlt[:n])
+				if err == io.EOF {
+					fmt.Printf("[%v] %s", err, convertByte2String(rlt[:n], GB18030))
+				}
+				fmt.Printf(`c:\>`)
 			} else {
 				fmt.Printf("%s", convertByte2String(rlt[:n], GB18030))
 			}

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -70,20 +69,18 @@ func main() {
 			} else {
 				cmd := exec.Command("cmd", "/c", string(buf[:n]))
 				logrus.Infof("execute cmd:%v", cmd.Args)
-				var outb, errb bytes.Buffer
-				cmd.Stdout = &outb
-				cmd.Stderr = &errb
-				err := cmd.Run()
-				if err != nil {
-					logrus.Errorf("failed to execute cmd, error:%v", err)
-				}
 
-				rlt := fmt.Sprintf("%v\n%v\n", outb.String(), errb.String())
-				if _, err := c.Write([]byte(rlt)); err != nil {
-					logrus.Errorf("failed to send result, error:%v", err)
-				} else {
-					logrus.Infof("sent result")
+				stdout, _ := cmd.StdoutPipe()
+				cmd.Start()
+				rlt := make([]byte, 1024)
+				for {
+					n, err := stdout.Read(rlt)
+					if err != nil {
+						break
+					}
+					c.Write([]byte(fmt.Sprintf("%s", rlt[:n])))
 				}
+				logrus.Infof("finish execute cmd:%v", cmd.Args)
 			}
 
 			select {
