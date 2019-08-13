@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 
@@ -68,7 +69,14 @@ func main() {
 					logrus.Info("sent: pong")
 				}
 			} else {
-				cmd := exec.Command("cmd", "/c", string(buf[:n]))
+				//splitting a string by space, except inside quotes
+				re := regexp.MustCompile(`[^\s"']+|"([^"]*)"|'([^']*)`)
+				arr := re.FindAllString(string(buf[:n-1]), -1)
+				opt := []string{"/c"}
+				for _, v := range arr {
+					opt = append(opt, strings.Trim(v, `"`))
+				}
+				cmd := exec.Command("cmd", opt...)
 				logrus.Infof("execute cmd:%v", cmd.Args)
 
 				stdout, _ := cmd.StdoutPipe()
