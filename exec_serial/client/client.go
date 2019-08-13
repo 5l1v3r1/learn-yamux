@@ -55,6 +55,8 @@ func main() {
 
 	////////////////////////////////////////////////////////////
 	defer func() {
+		kataConn.Write([]byte("exit\n"))
+
 		if err = kataConn.Close(); err != nil {
 			logrus.Fatalf("failed to close kata sock, error:%v", err)
 		}
@@ -66,7 +68,7 @@ func main() {
 	}()
 
 	fmt.Printf("<enter 'exit' to quit>\n")
-	fmt.Printf(`C:\Users\admin>`)
+	//fmt.Printf(`C:\Users\admin>`)
 
 	//read
 	go func() {
@@ -81,6 +83,11 @@ func main() {
 			}
 		}
 	}()
+
+	_, err = kataConn.Write([]byte("@echo welcome to windows command\n"))
+	if err != nil {
+		logrus.Fatalf("failed to connect server, error:%v", err)
+	}
 
 	//write
 	for {

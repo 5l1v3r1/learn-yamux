@@ -72,37 +72,54 @@ func main() {
 				//splitting a string by space, except inside quotes
 				re := regexp.MustCompile(`[^\s"']+|"([^"]*)"|'([^']*)`)
 				arr := re.FindAllString(string(buf[:n-1]), -1)
-				opt := []string{"/c"}
-				for _, v := range arr {
-					opt = append(opt, strings.Trim(v, `"`))
-				}
-				cmd := exec.Command("cmd", opt...)
-				logrus.Infof("execute cmd:%v", cmd.Args)
-
-				stdout, _ := cmd.StdoutPipe()
-				stderr, _ := cmd.StderrPipe()
-				cmd.Start()
-				oRlt := make([]byte, 1024)
-				eRlt := make([]byte, 1024)
-				for {
-					oN, oErr := stdout.Read(oRlt)
-					if oN > 0 {
-						c.Write([]byte(fmt.Sprintf("%s", oRlt[:oN])))
+				var (
+					cmd         *exec.Cmd
+					interactive = true
+				)
+				if interactive {
+					logrus.Infof("interactive mode")
+					opt := []string{"/k"}
+					for _, v := range arr {
+						opt = append(opt, strings.Trim(v, `"`))
 					}
-					if oErr != nil {
-						eN, eErr := stderr.Read(eRlt)
-						if oErr == io.EOF && eErr == io.EOF {
-							break
+					cmd = exec.Command("cmd", opt...)
+					logrus.Infof("execute cmd:%v", cmd.Args)
+					cmd.Stdin = s
+					cmd.Stderr = c
+					cmd.Stdout = c
+					cmd.Run()
+					logrus.Infof("finish execute interactive cmd:%v", cmd.Args)
+				} else {
+					logrus.Infof("non-interactive mode")
+					opt := []string{"/c"}
+					for _, v := range arr {
+						opt = append(opt, strings.Trim(v, `"`))
+					}
+					cmd = exec.Command("cmd", opt...)
+					stdout, _ := cmd.StdoutPipe()
+					stderr, _ := cmd.StderrPipe()
+					cmd.Start()
+					oRlt := make([]byte, 1024)
+					eRlt := make([]byte, 1024)
+					for {
+						oN, oErr := stdout.Read(oRlt)
+						if oN > 0 {
+							c.Write([]byte(fmt.Sprintf("%s", oRlt[:oN])))
 						}
-						if eN > 0 {
-							c.Write([]byte(fmt.Sprintf("%s", eRlt[:eN])))
+						if oErr != nil {
+							eN, eErr := stderr.Read(eRlt)
+							if oErr == io.EOF && eErr == io.EOF {
+								break
+							}
+							if eN > 0 {
+								c.Write([]byte(fmt.Sprintf("%s", eRlt[:eN])))
+							}
 						}
 					}
+					c.Write([]byte(`C:\Users\admin>`))
+					logrus.Infof("finish execute non-interactive cmd:%v", cmd.Args)
 				}
 
-				c.Write([]byte(`C:\Users\admin>`))
-
-				logrus.Infof("finish execute cmd:%v", cmd.Args)
 			}
 
 			select {
