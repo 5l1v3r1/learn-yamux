@@ -7,7 +7,9 @@ import (
 	"io"
 	"net"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -66,6 +68,24 @@ func main() {
 		}
 		logrus.Infof("%v closed", consoleSock)
 	}()
+
+	//创建监听退出chan
+	c := make(chan os.Signal)
+	//监听指定信号 ctrl+c kill
+	signal.Notify(c, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	go func() {
+		for s := range c {
+			switch s {
+			case syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
+				fmt.Printf("\nexit by signal: %v", s)
+				kataConn.Write([]byte("exit\n"))
+				os.Exit(0)
+			default:
+				fmt.Printf("\nother signal: %v", s)
+			}
+		}
+	}()
+	////////////////////////////////////////////////////////////
 
 	fmt.Printf("<enter 'exit' to quit>\n")
 	//fmt.Printf(`C:\Users\admin>`)
