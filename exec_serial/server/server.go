@@ -78,11 +78,11 @@ func main() {
 				)
 				if interactive {
 					logrus.Infof("interactive mode")
-					opt := []string{"/k"}
+					opt := []string{"/q", "/k"}
 					for _, v := range arr {
 						opt = append(opt, strings.Trim(v, `"`))
 					}
-					cmd = exec.Command("cmd", opt...)
+					cmd = exec.Command(`c:\windows\system32\cmd.exe`, opt...)
 					logrus.Infof("execute cmd:%v", cmd.Args)
 					cmd.Stdin = s
 					cmd.Stderr = c
