@@ -29,3 +29,8 @@ yamux_grpc_serial/client/client
 yamux_grpc_serial/client/client.exe
 yamux_grpc_serial/server/server
 yamux_grpc_serial/server/server.exe
+
+kata-agent/client/client
+kata-agent/server/server
+kata-agent/client/client.exe
+kata-agent/server/server.exe
