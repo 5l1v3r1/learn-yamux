@@ -175,6 +175,10 @@ func (c *serialChannel) setup() error {
 	com := &serial.Config{Name: c.serialPath}
 	s, err := serial.OpenPort(com)
 	if err != nil {
+		if c.serialConn != nil {
+			logrus.Warnf("failed to open serial port %v again, error:%v", c.serialPath, err)
+			return nil
+		}
 		logrus.Fatalf("failed to open serial port %v, error:%v", c.serialPath, err)
 	}
 	logrus.Infof("setup() - open serial port %v ok", c.serialPath)

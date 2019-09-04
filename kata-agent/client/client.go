@@ -9,9 +9,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"net"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -28,7 +28,6 @@ import (
 
 const (
 	unixSocketScheme  = "unix"
-	vsockSocketScheme = "vsock"
 )
 
 var defaultDialTimeout = 15 * time.Second
@@ -37,7 +36,7 @@ var defaultCloseTimeout = 5 * time.Second
 // AgentClient is an agent gRPC client connection wrapper for agentgrpc.AgentServiceClient
 type AgentClient struct {
 	agentgrpc.AgentServiceClient
-	//agentgrpc.HealthClient
+	agentgrpc.HealthClient
 	conn *grpc.ClientConn
 }
 
@@ -47,6 +46,9 @@ type yamuxSessionStream struct {
 }
 
 func (y *yamuxSessionStream) Close() error {
+	//logrus.Infof("yamuxSessionStream.Close() - begin")
+	//defer logrus.Infof("yamuxSessionStream.Close() - end")
+
 	waitCh := y.session.CloseChan()
 	timeout := time.NewTimer(defaultCloseTimeout)
 
@@ -61,6 +63,7 @@ func (y *yamuxSessionStream) Close() error {
 	// block until session is really closed
 	select {
 	case <-waitCh:
+		logrus.Infof("session closed")
 		timeout.Stop()
 	case <-timeout.C:
 		return fmt.Errorf("timeout waiting for session close")
@@ -108,7 +111,7 @@ func NewAgentClient(ctx context.Context, sock string, enableYamux bool) (*AgentC
 
 	return &AgentClient{
 		AgentServiceClient: agentgrpc.NewAgentServiceClient(conn),
-		//HealthClient:       agentgrpc.NewHealthClient(conn),
+		HealthClient:       agentgrpc.NewHealthClient(conn),
 		conn:               conn,
 	}, nil
 }
@@ -136,17 +139,6 @@ func parse(sock string) (string, *url.URL, error) {
 	var grpcAddr string
 	// validate more
 	switch addr.Scheme {
-	case vsockSocketScheme:
-		if addr.Hostname() == "" || addr.Port() == "" || addr.Path != "" {
-			return "", nil, grpcStatus.Errorf(codes.InvalidArgument, "Invalid vsock scheme: %s", sock)
-		}
-		if _, err := strconv.ParseUint(addr.Hostname(), 10, 32); err != nil {
-			return "", nil, grpcStatus.Errorf(codes.InvalidArgument, "Invalid vsock cid: %s", sock)
-		}
-		if _, err := strconv.ParseUint(addr.Port(), 10, 32); err != nil {
-			return "", nil, grpcStatus.Errorf(codes.InvalidArgument, "Invalid vsock port: %s", sock)
-		}
-		grpcAddr = vsockSocketScheme + ":" + addr.Host
 	case unixSocketScheme:
 		fallthrough
 	case "":
@@ -253,27 +245,6 @@ func unixDialer(sock string, timeout time.Duration) (net.Conn, error) {
 	return commonDialer(timeout, dialFunc, timeoutErr)
 }
 
-func parseGrpcVsockAddr(sock string) (uint32, uint32, error) {
-	sp := strings.Split(sock, ":")
-	if len(sp) != 3 {
-		return 0, 0, grpcStatus.Errorf(codes.InvalidArgument, "Invalid vsock address: %s", sock)
-	}
-	if sp[0] != vsockSocketScheme {
-		return 0, 0, grpcStatus.Errorf(codes.InvalidArgument, "Invalid vsock URL scheme: %s", sp[0])
-	}
-
-	cid, err := strconv.ParseUint(sp[1], 10, 32)
-	if err != nil {
-		return 0, 0, grpcStatus.Errorf(codes.InvalidArgument, "Invalid vsock cid: %s", sp[1])
-	}
-	port, err := strconv.ParseUint(sp[2], 10, 32)
-	if err != nil {
-		return 0, 0, grpcStatus.Errorf(codes.InvalidArgument, "Invalid vsock port: %s", sp[2])
-	}
-
-	return uint32(cid), uint32(port), nil
-}
-
 // This would bypass the grpc dialer backoff strategy and handle dial timeout
 // internally. Because we do not have a large number of concurrent dialers,
 // it is not reasonable to have such aggressive backoffs which would kill kata
@@ -320,18 +291,3 @@ func commonDialer(timeout time.Duration, dialFunc func() (net.Conn, error), time
 
 	return conn, nil
 }
-
-//func vsockDialer(sock string, timeout time.Duration) (net.Conn, error) {
-//	cid, port, err := parseGrpcVsockAddr(sock)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	dialFunc := func() (net.Conn, error) {
-//		return vsock.Dial(cid, port)
-//	}
-//
-//	timeoutErr := grpcStatus.Errorf(codes.DeadlineExceeded, "timed out connecting to vsock %d:%d", cid, port)
-//
-//	return commonDialer(timeout, dialFunc, timeoutErr)
-//}

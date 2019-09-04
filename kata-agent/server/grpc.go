@@ -1612,7 +1612,7 @@ func (a *agentGRPC) haveSeccomp() bool {
 
 func (a *agentGRPC) getAgentDetails(ctx context.Context) *pb.AgentDetails {
 	details := pb.AgentDetails{
-		Version:         pb.APIVersion,
+		Version:         version,
 		InitDaemon:      os.Getpid() == 1,
 		SupportsSeccomp: a.haveSeccomp(),
 	}

@@ -23,16 +23,13 @@ import (
 	"time"
 
 	"github.com/gogo/protobuf/proto"
-	//"github.com/kata-containers/agent/pkg/uevent"
-	pb "github.com/jimmy-xu/learn-yamux/pkg/grpc/protos"
-	//"github.com/opencontainers/runtime-spec/specs-go"
-	//opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
-	//"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	grpcStatus "google.golang.org/grpc/status"
+
+	pb "github.com/jimmy-xu/learn-yamux/pkg/grpc/protos"
 )
 
 const (
@@ -1033,7 +1030,7 @@ func (s *sandbox) startGRPC() {
 	grpcServer = grpc.NewServer(serverOpts...)
 
 	pb.RegisterAgentServiceServer(grpcServer, grpcImpl)
-	//pb.RegisterHealthServer(grpcServer, grpcImpl)
+	pb.RegisterHealthServer(grpcServer, grpcImpl)
 	s.server = grpcServer
 
 	s.wg.Add(1)
