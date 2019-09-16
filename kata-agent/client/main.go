@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -37,14 +36,14 @@ func testAgentClient(sock string, enableYamux bool) {
 		cli *AgentClient
 		err error
 	)
-	for i := 0; i<6; i++ {
+	for i := 0; i < 6; i++ {
 		cli, err = NewAgentClient(context.Background(), sock, enableYamux)
 		if err == nil {
 			break
 		}
 		logrus.Warnf("%v: failed to create new agent client, retry", i)
 		continue
-		time.Sleep(1*time.Second)
+		time.Sleep(1 * time.Second)
 	}
 	if err != nil {
 		logrus.Fatalf("Failed to connect to agent client: %s", err)
@@ -67,6 +66,26 @@ func testAgentClient(sock string, enableYamux bool) {
 	if err != nil {
 		logrus.Fatalf("failed get guest details: %s", err)
 	}
+
+	err = getNetworkConfig(cli)
+	if err != nil {
+		logrus.Fatalf("failed get network config: %s", err)
+	}
+
+	err = getUsers(cli)
+	if err != nil {
+		logrus.Fatalf("failed get users: %s", err)
+	}
+
+	err = getHostname(cli)
+	if err != nil {
+		logrus.Fatalf("failed get hostname: %s", err)
+	}
+
+	err = getKMS(cli)
+	if err != nil {
+		logrus.Fatalf("failed get kms server: %s", err)
+	}
 }
 
 func checkVersion(cli *AgentClient) error {
@@ -75,7 +94,7 @@ func checkVersion(cli *AgentClient) error {
 	if err != nil {
 		return err
 	}
-	logrus.Infof("[response]:\n%s", strings.Join(strings.Split(resp.String()," "),"\n"))
+	logrus.Infof("[response]:\n%s", resp.String())
 	return nil
 }
 
@@ -88,7 +107,7 @@ func checkHealth(cli *AgentClient) error {
 	if resp.Status != pb.HealthCheckResponse_SERVING {
 		return fmt.Errorf("unexpected health status: %s", resp.Status)
 	}
-	logrus.Infof("[response]:\n%s", strings.Join(strings.Split(resp.String()," "),"\n"))
+	logrus.Infof("[response]:\n%s", resp.String())
 	return nil
 }
 
@@ -98,6 +117,46 @@ func getGuestDetails(cli *AgentClient) error {
 	if err != nil {
 		return err
 	}
-	logrus.Infof("[response]:\n%s", strings.Join(strings.Split(resp.String()," "),"\n"))
+	logrus.Infof("[response]:\n%s", resp.String())
+	return nil
+}
+
+func getNetworkConfig(cli *AgentClient) error {
+	logrus.Infof("---------- [request] agent.GetNetworkConfig() ----------")
+	resp, err := cli.GetNetworkConfig(context.Background(), &pb.GetNetworkConfigRequest{MacAddress: "E6-29-C9-D2-00-0F"})
+	if err != nil {
+		return err
+	}
+	logrus.Infof("[response]:\n%s", resp.String())
+	return nil
+}
+
+func getUsers(cli *AgentClient) error {
+	logrus.Infof("---------- [request] agent.GetUsers() ----------")
+	resp, err := cli.GetUsers(context.Background(), &pb.GetUsersRequest{})
+	if err != nil {
+		return err
+	}
+	logrus.Infof("[response]:\n%s", resp.String())
+	return nil
+}
+
+func getHostname(cli *AgentClient) error {
+	logrus.Infof("---------- [request] agent.GetHostname() ----------")
+	resp, err := cli.GetHostname(context.Background(), &pb.GetHostnameRequest{})
+	if err != nil {
+		return err
+	}
+	logrus.Infof("[response]:\n%s", resp.String())
+	return nil
+}
+
+func getKMS(cli *AgentClient) error {
+	logrus.Infof("---------- [request] agent.GetKMS() ----------")
+	resp, err := cli.GetKMS(context.Background(), &pb.GetKMSRequest{})
+	if err != nil {
+		return err
+	}
+	logrus.Infof("[response]:\n%s", resp.String())
 	return nil
 }

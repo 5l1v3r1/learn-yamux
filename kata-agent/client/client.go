@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	unixSocketScheme  = "unix"
+	unixSocketScheme = "unix"
 )
 
 var defaultDialTimeout = 15 * time.Second
@@ -37,7 +37,8 @@ var defaultCloseTimeout = 5 * time.Second
 type AgentClient struct {
 	agentgrpc.AgentServiceClient
 	agentgrpc.HealthClient
-	conn *grpc.ClientConn
+	agentgrpc.WindowsServiceClient //for windows grpc
+	conn                           *grpc.ClientConn
 }
 
 type yamuxSessionStream struct {
@@ -110,9 +111,10 @@ func NewAgentClient(ctx context.Context, sock string, enableYamux bool) (*AgentC
 	}
 
 	return &AgentClient{
-		AgentServiceClient: agentgrpc.NewAgentServiceClient(conn),
-		HealthClient:       agentgrpc.NewHealthClient(conn),
-		conn:               conn,
+		AgentServiceClient:   agentgrpc.NewAgentServiceClient(conn),
+		HealthClient:         agentgrpc.NewHealthClient(conn),
+		WindowsServiceClient: agentgrpc.NewWindowsServiceClient(conn), //for windows grpc
+		conn:                 conn,
 	}, nil
 }
 
