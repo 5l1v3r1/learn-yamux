@@ -64,27 +64,40 @@ func testAgentClient(sock string, enableYamux bool) {
 
 	err = getGuestDetails(cli)
 	if err != nil {
-		logrus.Fatalf("failed get guest details: %s", err)
+		logrus.Fatalf("failed to get guest details: %s", err)
 	}
 
 	err = getNetworkConfig(cli)
 	if err != nil {
-		logrus.Fatalf("failed get network config: %s", err)
+		logrus.Fatalf("failed to get network config: %s", err)
 	}
 
 	err = getUsers(cli)
 	if err != nil {
-		logrus.Fatalf("failed get users: %s", err)
+		logrus.Fatalf("failed to get users: %s", err)
 	}
 
+	err = setHostname(cli)
+	if err != nil {
+		logrus.Fatalf("failed to set hostname: %s", err)
+	}
 	err = getHostname(cli)
 	if err != nil {
-		logrus.Fatalf("failed get hostname: %s", err)
+		logrus.Fatalf("failed to get hostname: %s", err)
 	}
 
+	err = setKMS(cli)
+	if err != nil {
+		logrus.Fatalf("failed to set kms server: %s", err)
+	}
 	err = getKMS(cli)
 	if err != nil {
-		logrus.Fatalf("failed get kms server: %s", err)
+		logrus.Fatalf("failed to get kms server: %s", err)
+	}
+
+	err = setUserPassword(cli)
+	if err != nil {
+		logrus.Fatalf("failed to set user password: %s", err)
 	}
 }
 
@@ -154,6 +167,36 @@ func getHostname(cli *AgentClient) error {
 func getKMS(cli *AgentClient) error {
 	logrus.Infof("---------- [request] agent.GetKMS() ----------")
 	resp, err := cli.GetKMS(context.Background(), &pb.GetKMSRequest{})
+	if err != nil {
+		return err
+	}
+	logrus.Infof("[response]:\n%s", resp.String())
+	return nil
+}
+
+func setUserPassword(cli *AgentClient) error {
+	logrus.Infof("---------- [request] agent.SetUserPassword() ----------")
+	resp, err := cli.SetUserPassword(context.Background(), &pb.SetUserPasswordRequest{Username: "admin", Password: "Test123!@#"})
+	if err != nil {
+		return err
+	}
+	logrus.Infof("[response]:\n%s", resp.String())
+	return nil
+}
+
+func setKMS(cli *AgentClient) error {
+	logrus.Infof("---------- [request] agent.SetKMS() ----------")
+	resp, err := cli.SetKMS(context.Background(), &pb.SetKMSRequest{Server: "kms.alibaba-inc.com"})
+	if err != nil {
+		return err
+	}
+	logrus.Infof("[response]:\n%s", resp.String())
+	return nil
+}
+
+func setHostname(cli *AgentClient) error {
+	logrus.Infof("---------- [request] agent.SetHostname() ----------")
+	resp, err := cli.SetHostname(context.Background(), &pb.SetHostnameRequest{Hostname: "jimmy-win7"})
 	if err != nil {
 		return err
 	}
