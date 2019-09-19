@@ -11,6 +11,15 @@ import (
 	pb "github.com/jimmy-xu/learn-yamux/pkg/grpc/protos"
 )
 
+var (
+	macAddr        = "9e:05:8e:c4:f1:70" // E6:29:C9:D2:00:0F e6:29:c9:d2:00:0f e6-29-c9-d2-00-0f
+	hostname       = "jimmy-win7"
+	ipAddr         = "172.19.0.245"
+	subnet         = "255.255.255.0"
+	defaultGateway = "172.19.0.1"
+	dns            = []string{"172.16.87.1", "8.8.4.4"}
+)
+
 func main() {
 	sock := ""
 	if len(os.Args) > 1 {
@@ -18,7 +27,7 @@ func main() {
 	}
 
 	if sock == "" {
-		sock = "/run/vc/vm/32272b12f09a0d91eae36c93773d8f8be17762003ccb9fac4446b3927742d242/kata.sock"
+		sock = "/run/vc/vm/ba9559adc4007b9f6f4788287f5086831cfe601af9225a3382899dcbeba17dca/kata.sock"
 	} else {
 		sock = fmt.Sprintf("/run/vc/vm/%s/kata.sock", sock)
 	}
@@ -67,6 +76,11 @@ func testAgentClient(sock string, enableYamux bool) {
 		logrus.Fatalf("failed to get guest details: %s", err)
 	}
 
+	err = setNetworkConfig(cli)
+	if err != nil {
+		logrus.Fatalf("failed to set network config: %s", err)
+	}
+
 	err = getNetworkConfig(cli)
 	if err != nil {
 		logrus.Fatalf("failed to get network config: %s", err)
@@ -75,15 +89,6 @@ func testAgentClient(sock string, enableYamux bool) {
 	err = getUsers(cli)
 	if err != nil {
 		logrus.Fatalf("failed to get users: %s", err)
-	}
-
-	err = setHostname(cli)
-	if err != nil {
-		logrus.Fatalf("failed to set hostname: %s", err)
-	}
-	err = getHostname(cli)
-	if err != nil {
-		logrus.Fatalf("failed to get hostname: %s", err)
 	}
 
 	err = setKMS(cli)
@@ -98,6 +103,21 @@ func testAgentClient(sock string, enableYamux bool) {
 	err = setUserPassword(cli)
 	if err != nil {
 		logrus.Fatalf("failed to set user password: %s", err)
+	}
+
+	curHostname, err := getHostname(cli)
+	if err != nil {
+		logrus.Fatalf("failed to get hostname: %s", err)
+	}
+
+	if curHostname != hostname {
+		logrus.Infof("current hostname is %v, rename to %v", curHostname, hostname)
+		err = setHostname(cli)
+		if err != nil {
+			logrus.Fatalf("failed to set hostname: %s", err)
+		}
+	} else {
+		logrus.Infof("hostname is %v, ignore", hostname)
 	}
 }
 
@@ -136,7 +156,24 @@ func getGuestDetails(cli *AgentClient) error {
 
 func getNetworkConfig(cli *AgentClient) error {
 	logrus.Infof("---------- [request] agent.GetNetworkConfig() ----------")
-	resp, err := cli.GetNetworkConfig(context.Background(), &pb.GetNetworkConfigRequest{MacAddress: "E6-29-C9-D2-00-0F"})
+	resp, err := cli.GetNetworkConfig(context.Background(), &pb.GetNetworkConfigRequest{MacAddress: macAddr})
+	if err != nil {
+		return err
+	}
+	logrus.Infof("[response]:\n%s", resp.String())
+	return nil
+}
+
+func setNetworkConfig(cli *AgentClient) error {
+	logrus.Infof("---------- [request] agent.SetNetworkConfig() ----------")
+	resp, err := cli.SetNetworkConfig(context.Background(), &pb.SetNetworkConfigRequest{
+		MacAddress: macAddr,
+		Gateway:    defaultGateway,
+		DnsServer:  dns,
+		Addrs: []*pb.Addrs{
+			{IpAddress: ipAddr, Subnet: subnet},
+		},
+	})
 	if err != nil {
 		return err
 	}
@@ -154,14 +191,14 @@ func getUsers(cli *AgentClient) error {
 	return nil
 }
 
-func getHostname(cli *AgentClient) error {
+func getHostname(cli *AgentClient) (string, error) {
 	logrus.Infof("---------- [request] agent.GetHostname() ----------")
 	resp, err := cli.GetHostname(context.Background(), &pb.GetHostnameRequest{})
 	if err != nil {
-		return err
+		return "", err
 	}
 	logrus.Infof("[response]:\n%s", resp.String())
-	return nil
+	return resp.Hostname, nil
 }
 
 func getKMS(cli *AgentClient) error {
@@ -196,7 +233,7 @@ func setKMS(cli *AgentClient) error {
 
 func setHostname(cli *AgentClient) error {
 	logrus.Infof("---------- [request] agent.SetHostname() ----------")
-	resp, err := cli.SetHostname(context.Background(), &pb.SetHostnameRequest{Hostname: "jimmy-win7"})
+	resp, err := cli.SetHostname(context.Background(), &pb.SetHostnameRequest{Hostname: hostname})
 	if err != nil {
 		return err
 	}
